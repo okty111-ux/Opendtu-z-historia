@@ -23,15 +23,26 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.platformio
-          key: pio-${{ matrix.env }}-${{ hashFiles('**/platformio.ini') }}
+          key: pio-${{ matrix.env }}-${{ github.sha }}
+          restore-keys: pio-${{ matrix.env }}-
 
       - name: Instalacja PlatformIO
         run: pip install --upgrade platformio intelhex
 
+      - name: Rozpakowanie zip
+        run: |
+          ls -la
+          Z=$(ls *.zip 2>/dev/null | sort -V | tail -1)
+          if [ -n "$Z" ]; then
+            echo "Rozpakowuje: $Z"
+            mkdir -p _src && unzip -q -o "$Z" -d _src
+          fi
+
       - name: Szukanie projektu
         id: dir
         run: |
-          P=$(find . -maxdepth 3 -name platformio.ini -not -path "*/.pio/*" | head -1)
+          P=$(find . -maxdepth 4 -name platformio.ini -not -path "*/.pio/*" | head -1)
+          if [ -z "$P" ]; then echo "Nie znaleziono platformio.ini"; exit 1; fi
           echo "Projekt: $P"
           echo "dir=$(dirname "$P")" >> $GITHUB_OUTPUT
 
