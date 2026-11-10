@@ -1,0 +1,52 @@
+name: Kompilacja Fusion v2
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [opendtufusionv2, opendtufusionv2_history]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ matrix.env }}-${{ hashFiles('**/platformio.ini') }}
+
+      - name: Instalacja PlatformIO
+        run: pip install --upgrade platformio intelhex
+
+      - name: Szukanie projektu
+        id: dir
+        run: |
+          P=$(find . -maxdepth 3 -name platformio.ini -not -path "*/.pio/*" | head -1)
+          echo "Projekt: $P"
+          echo "dir=$(dirname "$P")" >> $GITHUB_OUTPUT
+
+      - name: Kompilacja
+        working-directory: ${{ steps.dir.outputs.dir }}
+        run: pio run -e ${{ matrix.env }}
+
+      - name: Przygotowanie plikow
+        working-directory: ${{ steps.dir.outputs.dir }}
+        run: |
+          mkdir -p wynik
+          cp .pio/build/${{ matrix.env }}/firmware.bin wynik/opendtu-${{ matrix.env }}.bin
+          cp .pio/build/${{ matrix.env }}/firmware.factory.bin wynik/opendtu-${{ matrix.env }}.factory.bin || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opendtu-${{ matrix.env }}
+          path: ${{ steps.dir.outputs.dir }}/wynik/
