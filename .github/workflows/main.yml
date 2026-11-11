@@ -63,4 +63,52 @@ jobs:
           yarn install --frozen-lockfile
           yarn build
 
-      - name: Kompila
+      - name: Kompilacja
+        working-directory: ${{ steps.dir.outputs.dir }}
+        run: pio run -e ${{ matrix.env }}
+
+      - name: Przygotowanie plikow
+        working-directory: ${{ steps.dir.outputs.dir }}
+        run: |
+          mkdir -p wynik
+          cp .pio/build/${{ matrix.env }}/firmware.bin wynik/opendtu-${{ matrix.env }}.bin
+          cp .pio/build/${{ matrix.env }}/firmware.factory.bin wynik/opendtu-${{ matrix.env }}.factory.bin || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opendtu-${{ matrix.env }}
+          path: ${{ steps.dir.outputs.dir }}/wynik/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+          merge-multiple: true
+
+      - name: Opis wersji (build, sha256, size)
+        working-directory: art
+        run: |
+          for f in opendtu-*.bin; do
+            case "$f" in *.factory.bin) continue;; esac
+            n="${f%.bin}"
+            {
+              echo "build=${{ github.run_number }}"
+              echo "sha256=$(sha256sum "$f" | cut -d' ' -f1)"
+              echo "size=$(stat -c%s "$f")"
+              echo "date=$(date -u +%Y-%m-%dT%H:%MZ)"
+            } > "$n.txt"
+            cat "$n.txt"
+          done
+          ls -la
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Kompilacja #${{ github.run_number }}
+          make_latest: "true"
+          files: art/*
