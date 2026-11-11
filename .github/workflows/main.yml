@@ -20,6 +20,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - uses: actions/cache@v4
         with:
           path: ~/.platformio
@@ -31,12 +35,16 @@ jobs:
 
       - name: Rozpakowanie zip
         run: |
-          ls -la
-          Z=$(ls *.zip 2>/dev/null | sort -V | tail -1)
-          if [ -n "$Z" ]; then
-            echo "Rozpakowuje: $Z"
-            mkdir -p _src && unzip -q -o "$Z" -d _src
-          fi
+          ls -la *.zip || true
+          for Z in $(ls *.zip 2>/dev/null | sort -V -r); do
+            if unzip -tq "$Z" >/dev/null 2>&1; then
+              echo "Uzywam: $Z"
+              rm -rf _src && mkdir -p _src && unzip -q -o "$Z" -d _src
+              break
+            else
+              echo "::warning::Uszkodzony plik pominiety: $Z"
+            fi
+          done
 
       - name: Szukanie projektu
         id: dir
@@ -45,6 +53,13 @@ jobs:
           if [ -z "$P" ]; then echo "Nie znaleziono platformio.ini"; exit 1; fi
           echo "Projekt: $P"
           echo "dir=$(dirname "$P")" >> $GITHUB_OUTPUT
+
+      - name: Budowanie panelu WWW
+        working-directory: ${{ steps.dir.outputs.dir }}/webapp
+        run: |
+          corepack enable
+          yarn install --frozen-lockfile
+          yarn build
 
       - name: Kompilacja
         working-directory: ${{ steps.dir.outputs.dir }}
