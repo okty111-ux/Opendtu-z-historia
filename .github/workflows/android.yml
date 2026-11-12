@@ -1,0 +1,51 @@
+name: Aplikacja Android
+
+on:
+  push:
+    paths:
+      - "Aplikacja-Android*.zip"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rozpakowanie zip
+        run: |
+          Z=$(ls Aplikacja-Android*.zip 2>/dev/null | sort -V -r | head -1)
+          if [ -z "$Z" ]; then echo "Brak pliku Aplikacja-Android*.zip"; exit 1; fi
+          echo "Uzywam: $Z"
+          rm -rf _app && mkdir -p _app && unzip -q -o "$Z" -d _app
+          P=$(find _app -maxdepth 3 -name settings.gradle | head -1)
+          echo "PROJ=$(dirname "$P")" >> $GITHUB_ENV
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Budowanie APK
+        working-directory: ${{ env.PROJ }}
+        run: gradle assembleDebug --no-daemon
+
+      - name: Przygotowanie pliku
+        run: |
+          mkdir -p wynik
+          cp "$PROJ"/app/build/outputs/apk/debug/app-debug.apk wynik/OpenDTU-Okty.apk
+          ls -la wynik
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-${{ github.run_number }}
+          name: Aplikacja Android ${{ github.run_number }}
+          make_latest: "false"
+          files: wynik/OpenDTU-Okty.apk
